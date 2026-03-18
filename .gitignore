@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+kontolotse.db
+kontolotse.db-wal
+kontolotse.db-shm
+.env
+*.zip

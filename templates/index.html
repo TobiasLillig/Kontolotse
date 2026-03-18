@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kontolotse</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<!-- Loading Screen -->
+<div id="loading-screen" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s;">
+    <img id="loading-logo-dark" src="/static/logo-dark.png" alt="Kontolotse" style="width:240px;margin-bottom:36px;opacity:0;transform:scale(0.92);transition:opacity 0.7s ease, transform 0.7s ease;">
+    <img id="loading-logo-light" src="/static/logo-light.png" alt="Kontolotse" style="width:240px;margin-bottom:36px;display:none;opacity:0;transform:scale(0.92);transition:opacity 0.7s ease, transform 0.7s ease;">
+    <div style="width:200px;height:3px;background:rgba(128,128,128,0.15);border-radius:2px;overflow:hidden;">
+        <div id="loading-bar" style="width:0%;height:100%;border-radius:2px;transition:width 0.2s ease;"></div>
+    </div>
+</div>
+<script>
+(function(){
+    var t = localStorage.getItem("theme") || "auto";
+    var h = new Date().getHours();
+    var isLight = t === "light" || (t === "auto" && h >= 7 && h < 19);
+    var ls = document.getElementById("loading-screen");
+    ls.style.background = isLight ? "#f0f2f5" : "#0a0c12";
+    var logoDark = document.getElementById("loading-logo-dark");
+    var logoLight = document.getElementById("loading-logo-light");
+    logoDark.style.display = isLight ? "none" : "block";
+    logoLight.style.display = isLight ? "block" : "none";
+    var activeLogo = isLight ? logoLight : logoDark;
+    setTimeout(function(){ activeLogo.style.opacity="1"; activeLogo.style.transform="scale(1)"; }, 50);
+    document.getElementById("loading-bar").style.background = 
+        isLight ? "linear-gradient(90deg,#5b6abf,#4ade80)" : "linear-gradient(90deg,#6c7bd4,#4ade80)";
+    var bar = document.getElementById("loading-bar");
+    var steps = [
+        {w:12, d:100}, {w:28, d:150}, {w:33, d:280}, {w:48, d:120},
+        {w:56, d:90}, {w:62, d:300}, {w:71, d:80}, {w:79, d:60},
+        {w:83, d:220}, {w:91, d:100}, {w:96, d:80}, {w:100, d:120}
+    ];
+    var delay = 200;
+    steps.forEach(function(s){
+        delay += s.d;
+        setTimeout(function(){ bar.style.width = s.w + "%"; }, delay);
+    });
+})();
+</script>
+
+<div class="app-shell" style="display:none;" id="app-shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <img src="/static/logo.png" alt="Kontolotse" style="width:200px;margin:0 auto 2px;display:block;">
+            <div class="version">Version 1.0</div>
+        </div>
+        <nav>
+            <a class="nav-item active" data-section="dashboard"><span class="icon">■</span> Dashboard</a>
+            <a class="nav-item" data-section="vertraege"><span class="icon">📄</span> Verträge</a>
+            <a class="nav-item" data-section="kontostand"><span class="icon">🏦</span> Kontostand</a>
+            <a class="nav-item" data-section="einzahlungen"><span class="icon">💲</span> Einzahlungen</a>
+            <a class="nav-item" data-section="toepfe"><span class="icon">📦</span> Virt. Töpfe</a>
+            <a class="nav-item" data-section="simulation"><span class="icon">📈</span> Simulation</a>
+            <a class="nav-item" data-section="kalender"><span class="icon">📅</span> Kalender</a>
+        </nav>
+        <div style="padding:12px 12px 0;margin-top:auto;">
+            <a class="nav-item" data-section="einstellungen"><span class="icon">⚙</span> Einstellungen</a>
+            <a class="nav-item" data-section="hilfe"><span class="icon">❓</span> Hilfe</a>
+            <a class="nav-item hidden" id="nav-debug" onclick="document.getElementById('debug-panel').classList.toggle('hidden')" style="opacity:0.4;font-size:0.8rem;"><span class="icon">🐛</span> Debug</a>
+        </div>
+        <div style="padding:8px 24px 12px;border-top:1px solid var(--border);margin-top:8px;">
+            <div class="theme-toggle" style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;">
+                <span style="font-size:0.75rem;cursor:pointer;" onclick="setTheme('light')" title="Hell">☀️</span>
+                <div class="theme-switch" onclick="cycleTheme()" style="width:48px;height:22px;background:var(--bg-input);border:1px solid var(--border);border-radius:11px;position:relative;cursor:pointer;transition:background 0.2s;">
+                    <div id="theme-knob" style="width:16px;height:16px;background:var(--accent);border-radius:50%;position:absolute;top:2px;transition:left 0.2s;"></div>
+                </div>
+                <span style="font-size:0.75rem;cursor:pointer;" onclick="setTheme('dark')" title="Dunkel">🌙</span>
+            </div>
+            <div style="font-size:0.65rem;color:var(--text-muted);text-align:center;">
+                Vibecodet with ❤️ by tobi_mit_1000_ideen · <a href="https://ko-fi.com/tobi_mit_1000_ideen" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">☕ Buy Tobias a Coffee</a>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-content">
+
+        <!-- ===== DASHBOARD ===== -->
+        <section id="section-dashboard">
+            <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h2>Dashboard</h2>
+                    <p>Übersicht deiner Finanzen auf einen Blick</p>
+                </div>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <div style="position:relative;">
+                        <input type="text" id="global-search" placeholder="🔍 Suche..." oninput="globalSearch(this.value)" style="width:240px;padding:7px 12px;font-size:0.82rem;background:var(--bg-secondary);border:1px solid var(--border);color:var(--text-primary);border-radius:var(--radius-sm);">
+                        <div id="global-search-results" class="hidden" style="position:absolute;top:100%;right:0;width:380px;max-height:350px;overflow-y:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:5000;margin-top:4px;"></div>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="dash-edit-btn" onclick="toggleDashEdit()" title="Kacheln bearbeiten">✏️</button>
+                </div>
+            </div>
+            <div id="dash-warnungen" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;"></div>
+            <div id="dash-tiles" class="dash-tiles-grid"></div>
+            <div class="card" id="schnellstart-card" style="margin-top:20px;">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3>🚀 Schnellstart</h3>
+                    <button class="btn btn-ghost btn-sm" onclick="dismissSchnellstart()" style="font-size:0.75rem;opacity:0.6;">Ausblenden</button>
+                </div>
+                <div style="color:var(--text-secondary);font-size:0.88rem;line-height:2;">
+                    <strong>1.</strong> <a href="#" onclick="navigateTo('vertraege');return false;" style="color:var(--accent);">Verträge &amp; Fixkosten</a> anlegen <span style="color:var(--text-muted);font-size:0.75rem;">(optional)</span><br>
+                    <strong>2.</strong> <a href="#" onclick="navigateTo('toepfe');return false;" style="color:var(--accent);">Virtuelle Töpfe</a> für Rücklagen anlegen <span style="color:var(--text-muted);font-size:0.75rem;">(optional)</span><br>
+                    <strong>3.</strong> <a href="#" onclick="navigateTo('einzahlungen');return false;" style="color:var(--accent);">Einzahlungen</a> konfigurieren — trage hier den Betrag deines Dauerauftrags ein<br>
+                    <strong>4.</strong> <a href="#" onclick="navigateTo('kontostand');return false;" style="color:var(--accent);">Bankkontostand</a> eintragen — den aktuellen Saldo deines Bankkontos
+                </div>
+                <div style="margin-top:12px;padding:12px 16px;background:var(--bg-input);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--text-secondary);line-height:1.6;">
+                    <strong>💡 So funktioniert's:</strong> Kontolotse ist kein Bankkonto — es simuliert nur den Verlauf deines echten Kontos.
+                    Richte bei deiner Bank einen <strong>Dauerauftrag</strong> auf dein Fixkostenkonto ein (z.B. am 1. jeden Monats).
+                    Trage diesen Betrag hier unter „Einzahlungen" ein und pflege deine Verträge.
+                    Kontolotse zeigt dir dann, ob dein Dauerauftrag ausreicht und wie sich dein Saldo über 24 Monate entwickelt.
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;">
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header"><h3>Einnahmen vs. Ausgaben</h3></div>
+                    <div style="position:relative;height:260px;"><canvas id="dash-chart-bar"></canvas></div>
+                </div>
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header"><h3>Ausgaben nach Kategorie</h3></div>
+                    <div style="position:relative;height:260px;"><canvas id="dash-chart-donut"></canvas></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== VERTRÄGE ===== -->
+        <section id="section-vertraege" class="hidden">
+            <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h2>Verträge &amp; Fixkosten</h2>
+                    <p>Alle wiederkehrenden Ausgaben verwalten</p>
+                </div>
+                <button class="btn btn-primary" onclick="openNewVertragModal()">+ Neuer Vertrag</button>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h3>Alle Verträge</h3>
+                    <span style="color:var(--text-muted);font-size:0.82rem;">
+                        Monatlich: <strong id="vertraege-summe" style="color:var(--red);">0,00 €</strong>
+                        &nbsp;|&nbsp;
+                        Jährlich: <strong id="vertraege-jahres" style="color:var(--red);">0,00 €</strong>
+                    </span>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr>
+                            <th>Name</th><th>Kategorie</th><th>Konto</th><th>Betrag</th>
+                            <th>Rhythmus</th><th>pro Monat</th><th>Status</th><th>Geprüft</th><th></th>
+                        </tr></thead>
+                        <tbody id="vertraege-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== KONTOSTAND ===== -->
+        <section id="section-kontostand" class="hidden">
+            <div class="page-header">
+                <h2>Kontostand</h2>
+                <p>Aktuellen Saldo deines Bankkontos pflegen</p>
+            </div>
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="label">Bankkonto gesamt</div>
+                    <div id="ks-bank-gesamt" class="value neutral">0,00 €</div>
+                    <div class="sub">Dein Banksaldo</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Reserviert (Töpfe)</div>
+                    <div id="ks-toepfe-reserviert" class="value neutral">0,00 €</div>
+                    <div class="sub">Virtuell gebunden</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Fixkostenkonto</div>
+                    <div id="ks-fix-verfuegbar" class="value neutral">0,00 €</div>
+                    <div class="sub">= Bankkonto − Töpfe</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>Bankkontostand aktualisieren</h3></div>
+                <div class="info-row">
+                    Der echte Bank-Saldo. Davon werden die virtuellen Töpfe abgezogen —
+                    der Rest ist dein <strong>Fixkostenkonto</strong>.
+                </div>
+                <div class="form-grid">
+                    <div class="form-group"><label>Neuer Bank-Saldo (EUR)</label><input type="number" id="ks-saldo" step="0.01" placeholder="0,00"></div>
+                </div>
+                <div class="form-actions"><button class="btn btn-primary" onclick="saveSaldo()">Speichern</button></div>
+            </div>
+        </section>
+
+        <!-- ===== EINZAHLUNGEN ===== -->
+        <section id="section-einzahlungen" class="hidden">
+            <div class="page-header">
+                <h2>Einzahlungen</h2>
+                <p>Geplante und manuelle Einzahlungen konfigurieren</p>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>Neue Einzahlung</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>Bezeichnung *</label><input type="text" id="e-bezeichnung" placeholder="z.B. Gehalt, Kindergeld"></div>
+                    <div class="form-group"><label>Betrag (EUR) *</label><input type="number" id="e-betrag" step="0.01" min="0" placeholder="0,00"></div>
+                    <div class="form-group"><label>Tag im Monat</label><input type="number" id="e-tag" min="1" max="31" placeholder="z.B. 1 oder 15"></div>
+                    <div class="form-group"><label>Typ</label>
+                        <select id="e-typ"><option value="fest">Fest (monatlich)</option><option value="manuell">Manuell / Einmalig</option></select>
+                    </div>
+                </div>
+                <div class="form-actions"><button class="btn btn-primary" onclick="addEinzahlung()">Einzahlung speichern</button></div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h3>Alle Einzahlungen</h3>
+                    <span style="color:var(--text-muted);font-size:0.82rem;">
+                        Monatl. Summe: <strong id="einzahlungen-summe" style="color:var(--green);">0,00 €</strong>
+                        <span id="einzahlungen-empfehlung"></span>
+                    </span>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Bezeichnung</th><th>Betrag</th><th>Fälligkeit</th><th>Typ</th><th></th></tr></thead>
+                        <tbody id="einzahlungen-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== VIRTUELLE TÖPFE ===== -->
+        <section id="section-toepfe" class="hidden">
+            <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h2>Virtuelle Töpfe</h2>
+                    <p>Rücklagen und variable Ausgaben per Umschlagsystem verwalten</p>
+                </div>
+                <button class="btn btn-primary" onclick="openNewTopfModal()">+ Neuer Topf</button>
+            </div>
+            <div class="toepfe-layout">
+                <div class="toepfe-list-panel">
+                    <div class="toepfe-list-header">Gesamt reserviert: <strong id="toepfe-gesamt">0,00 €</strong></div>
+                    <div id="toepfe-list"></div>
+                </div>
+                <div class="topf-detail-panel" id="topf-detail">
+                    <div class="empty-state"><p>Topf auswählen oder neuen anlegen.</p></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SIMULATION ===== -->
+        <section id="section-simulation" class="hidden">
+            <div class="page-header">
+                <h2>Kontosimulation</h2>
+                <p>Tagesgenaue Prognose über 24 Monate auf Basis deiner Verträge und Einzahlungen</p>
+            </div>
+            <div id="sim-loading" class="card" style="text-align:center;padding:48px;color:var(--text-muted);">
+                Simulation wird berechnet…
+            </div>
+            <div id="sim-content" class="hidden">
+                <div class="stat-grid">
+                    <div class="stat-card"><div class="label">Startsaldo (heute)</div><div id="sim-startsaldo" class="value neutral">–</div></div>
+                    <div class="stat-card"><div class="label">Minimaler Saldo</div><div id="sim-min-saldo" class="value neutral">–</div><div id="sim-min-datum" class="sub">–</div></div>
+                    <div class="stat-card"><div class="label">Saldo in 24 Monaten</div><div id="sim-endsaldo" class="value neutral">–</div></div>
+                    
+                </div>
+                <div id="sim-warnung" class="card hidden" style="border-color:var(--red);background:var(--red-bg);display:flex;align-items:center;gap:16px;">
+                    <div id="sim-warnung-text" style="flex:1;"></div>
+                    <button id="sim-warnung-btn" class="btn btn-primary btn-sm hidden" onclick="simUeberweisungErledigt()" style="white-space:nowrap;">✅ Überweisung erledigt</button>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Saldoverlauf (tagesgenau)</h3></div>
+                    <div style="position:relative;height:320px;"><canvas id="sim-chart"></canvas></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Monatsübersicht</h3></div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Monat</th><th>Startsaldo</th><th>Einnahmen</th><th>Ausgaben</th><th>Netto</th><th>Endsaldo</th><th>Status</th></tr></thead>
+                            <tbody id="sim-monate-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ===== KALENDER ===== -->
+        <section id="section-kalender" class="hidden">
+            <div class="page-header">
+                <h2>Buchungskalender</h2>
+                <p>Heatmap-Übersicht: Wann fallen wie viele Buchungen an?</p>
+            </div>
+            <div class="card">
+                <div class="cal-nav">
+                    <button class="btn btn-ghost btn-sm" onclick="calNav(-1)">← Vorheriger</button>
+                    <h3 id="cal-monat-label">–</h3>
+                    <button class="btn btn-ghost btn-sm" onclick="calNav(1)">Nächster →</button>
+                </div>
+                <div class="cal-legend">
+                    <span><span class="cal-dot" style="background:rgba(74,222,128,0.18);border:1px solid rgba(74,222,128,0.35);"></span> Sicher</span>
+                    <span><span class="cal-dot cal-level-1"></span> 1 Buchung</span>
+                    <span><span class="cal-dot" style="background:rgba(251,146,60,0.18);border:1px solid rgba(251,146,60,0.35);"></span> 2+ Buchungen</span>
+                    <span style="margin-left:8px;"><span class="cal-dot" style="border:1px dashed var(--orange);background:rgba(251,146,60,0.1);"></span> Sicherheitsfenster</span>
+                    <span><span class="cal-dot cal-faellig-dot"></span> Fälligkeitstag</span>
+                    <span><span class="cal-dot" style="background:var(--bg-primary);border:1px solid var(--border);opacity:0.6;font-size:0.55rem;text-align:center;line-height:14px;">✕🔒</span> Bankfrei</span>
+                </div>
+                <div class="cal-layout">
+                    <div>
+                        <div class="cal-grid">
+                            <div class="cal-header">Mo</div><div class="cal-header">Di</div>
+                            <div class="cal-header">Mi</div><div class="cal-header">Do</div>
+                            <div class="cal-header">Fr</div><div class="cal-header">Sa</div>
+                            <div class="cal-header">So</div>
+                        </div>
+                        <div id="cal-days" class="cal-grid"></div>
+                    </div>
+                    <div class="cal-detail-side">
+                        <div id="cal-detail" class="card" style="margin-bottom:0;display:none;">
+                            <div class="card-header"><h3 id="cal-detail-title">–</h3></div>
+                            <div id="cal-detail-body"></div>
+                        </div>
+                        <div id="cal-detail-placeholder" style="color:var(--text-muted);font-size:0.85rem;padding:20px;text-align:center;">
+                            Klicke auf einen Tag für Details
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== EINSTELLUNGEN ===== -->
+        <section id="section-einstellungen" class="hidden">
+            <div class="page-header">
+                <h2>Einstellungen</h2>
+                <p>Globale Parameter anpassen</p>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>Sicherheitstage</h3></div>
+                <div class="info-row">
+                    Anzahl Tage nach einer Fälligkeit, bis die Buchung als "sicher verarbeitet" gilt.
+                    Beeinflusst die Zuverlässigkeitsanzeige im Dashboard.
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Name des Bankkontos</label>
+                        <input type="text" id="param-kontoname" value="Fixkostenkonto" placeholder="z.B. Fixkostenkonto, Goldesel">
+                    </div>
+                    <div class="form-group">
+                        <label>Sicherheitspuffer (EUR)</label>
+                        <input type="number" id="param-sicherheitspuffer" min="0" step="10" value="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Sicherheitstage VOR Buchung</label>
+                        <input type="number" id="param-sicherheitstage-vor" min="0" max="14" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Sicherheitstage NACH Buchung</label>
+                        <input type="number" id="param-sicherheitstage" min="0" max="14" value="2">
+                    </div>
+                    <div class="form-group">
+                        <label>Standard-Prüfintervall (Monate)</label>
+                        <input type="number" id="param-pruef-intervall" min="0" max="48" value="12">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>KFZ-Versicherung prüfen ab Monat</label>
+                    <select id="param-kfz-pruefmonat">
+                        <option value="9">September</option><option value="10">Oktober</option>
+                        <option value="11">November</option><option value="12">Dezember</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Moped/E-Scooter prüfen ab Monat</label>
+                    <select id="param-moped-pruefmonat">
+                        <option value="1">Januar</option><option value="2">Februar</option>
+                        <option value="12">Dezember</option>
+                    </select>
+                </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="param-pruef-reset-fragen" checked>
+                        Nach Vertragsänderung fragen ob Prüfdatum zurückgesetzt werden soll
+                    </label>
+                </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="param-kontostand-schaetzen" checked>
+                        Kontostand beim Start schätzen (Vorausfüllung im Startup-Dialog)
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="saveEinstellungen()">Speichern</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>Kategorien</h3></div>
+                <div class="info-row">
+                    Kategorien für Verträge verwalten. Wird eine Kategorie gelöscht die noch an Verträgen hängt,
+                    behalten die Verträge ihre Kategorie — sie wird nur aus der Auswahl entfernt.
+                </div>
+                <div id="kat-list" style="margin-bottom:12px;"></div>
+                <div class="form-grid" style="grid-template-columns:1fr auto;">
+                    <div class="form-group"><label>Neue Kategorie</label><input type="text" id="kat-new-name" placeholder="z.B. Mobilität"></div>
+                    <div class="form-group" style="justify-content:flex-end;"><label>&nbsp;</label><button class="btn btn-primary btn-sm" onclick="addKategorie()">Hinzufügen</button></div>
+                </div>
+                <div id="kat-suggestions" style="margin-top:8px;"></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>System</h3></div>
+                <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:16px;">
+                    Datenbank-Pfad: <code id="dash-db-pfad" style="font-family:var(--font-mono);color:var(--text-muted);word-break:break-all;">–</code>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== HILFE ===== -->
+        <section id="section-hilfe" class="hidden">
+            <div class="page-header">
+                <h2>Hilfe & Anleitung</h2>
+                <p>Kontolotse v1.0 — Vollständige Dokumentation</p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Was ist Kontolotse?</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    Kontolotse ist eine lokale Web-Anwendung zur Verwaltung deiner regelmäßigen Fixkosten und Einnahmen.
+                    Es läuft komplett auf deinem eigenen Computer — keine Cloud, keine Registrierung, keine Daten die dein Gerät verlassen.
+                    Die Daten werden in einer SQLite-Datenbank gespeichert die du jederzeit sichern oder mitnehmen kannst.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Erste Schritte</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    <strong>1. Verträge &amp; Fixkosten anlegen</strong> <span style="color:var(--text-muted);">(optional)</span><br>
+                    Unter „Verträge" legst du alle wiederkehrenden Ausgaben an: Name, Betrag, Startdatum, 
+                    Abbuchungsrhythmus (monatlich bis zweijährlich) und Kategorie. 
+                    Optional: Enddatum, Abbuchungstag, Mindestlaufzeit und Kündigungsfrist.<br><br>
+
+                    <strong>2. Virtuelle Töpfe anlegen</strong> <span style="color:var(--text-muted);">(optional)</span><br>
+                    Töpfe sind virtuelle Rücklagen auf deinem Konto (Umschlagsystem). Du kannst für jedes
+                    Sparziel einen Topf anlegen und eine monatliche Zuweisung konfigurieren.
+                    Töpfe verändern den realen Kontostand nicht — sie helfen dir, dein Geld zu strukturieren.<br><br>
+
+                    <strong>3. Einzahlungen konfigurieren</strong><br>
+                    Unter „Einzahlungen" trägst du den Betrag deines Dauerauftrags ein — also den Betrag,
+                    den du monatlich von deinem Gehaltskonto auf dein Fixkostenkonto überweist.
+                    Gib den Tag im Monat an, an dem der Dauerauftrag ausgeführt wird (z.B. der 1.).<br><br>
+
+                    <strong>4. Bankkontostand eintragen</strong><br>
+                    Beim ersten Start wirst du nach deinem aktuellen Bankkontostand gefragt.
+                    Bei jedem weiteren Start schätzt die App den aktuellen Stand anhand der 
+                    zwischenzeitlich fälligen Buchungen — du kannst den Wert bestätigen oder korrigieren.<br><br>
+
+                    <strong>💡 Wie funktioniert das mit dem Bankkonto?</strong><br>
+                    Kontolotse ist <strong>kein echtes Bankkonto</strong> — es ist ein Planungstool, das den Verlauf
+                    deines realen Fixkostenkontos simuliert. Die typische Einrichtung sieht so aus:<br>
+                    1. Du hast ein Fixkostenkonto bei deiner Bank (z.B. ING, Sparkasse)<br>
+                    2. Du richtest bei deiner Bank einen <strong>Dauerauftrag</strong> ein, der monatlich einen festen Betrag
+                    von deinem Gehaltskonto auf das Fixkostenkonto überweist<br>
+                    3. In Kontolotse trägst du diesen Dauerauftrag-Betrag als „Einzahlung" ein<br>
+                    4. Kontolotse berechnet dann, ob dieser Betrag ausreicht um alle Verträge + Töpfe zu decken<br><br>
+
+                    <strong>5. Dashboard prüfen</strong><br>
+                    Das Dashboard zeigt dir die wichtigsten Kennzahlen auf einen Blick: Kontostand,
+                    monatliche Ausgaben, Warnungen und Dauerauftrags-Empfehlung. Die 24-Monats-Simulation
+                    unter „Simulation" zeigt den prognostizierten Saldoverlauf.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Konten & Töpfe (Umschlagsystem)</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    <strong>Fixkostenkonto (Hauptkonto)</strong><br>
+                    Dein primäres Konto, von dem Verträge abgebucht werden und auf dem Einzahlungen eingehen.
+                    Der Saldo dieses Kontos ist die Basis für die 24-Monats-Simulation.<br><br>
+
+                    <strong>Virtuelle Töpfe (Umschlagsystem)</strong><br>
+                    Töpfe funktionieren wie Briefumschläge: Du reservierst Geld für bestimmte Zwecke —
+                    Urlaub, Notgroschen, Autoreparatur, Weihnachtsgeschenke. Das Geld bleibt auf deinem Bankkonto,
+                    wird aber innerhalb der App als „reserviert" behandelt.
+                    Du kannst Geld zwischen Hauptkonto und Töpfen verschieben oder direkt einem Topf zuweisen.<br><br>
+
+                    <strong>Mehrere Bankkonten?</strong><br>
+                    Wenn du mit mehreren realen Bankkonten arbeitest (z.B. Eingangskonto, Fixkostenkonto,
+                    Haushaltskonto), kannst du diese als separate Konten im System anlegen.
+                    Ordne Verträge und Einzahlungen den richtigen Konten zu — die Dauerauftrags-Empfehlung
+                    im Dashboard zeigt dir dann automatisch, wie viel du monatlich per Dauerauftrag
+                    auf jedes Konto überweisen musst.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>24-Monats-Simulation</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    Die Simulation berechnet tagesgenau deinen Saldoverlauf für die nächsten 24 Monate.
+                    Sie berücksichtigt alle aktiven Verträge mit ihrem jeweiligen Rhythmus, geplante
+                    Preisänderungen, Enddaten und Einzahlungen. Buchungen die auf Wochenenden oder
+                    Feiertage fallen, werden automatisch auf den nächsten Bankwerktag verschoben —
+                    genau wie bei deiner Bank.<br><br>
+
+                    Im Dashboard siehst du das Ergebnis als Balkendiagramm (Einnahmen vs. Ausgaben pro Monat)
+                    und als Kuchengrafik (Ausgaben nach Kategorie).
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Buchungskalender</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    Der Kalender zeigt als Heatmap, wann wie viele Buchungen anfallen:<br><br>
+
+                    <strong style="color:var(--green);">■ Grün</strong> — Keine Buchungen, sicherer Tag<br>
+                    <strong style="color:var(--yellow);">■ Gelb</strong> — 1 Buchung<br>
+                    <strong style="color:var(--orange);">■ Orange</strong> — 2 oder mehr Buchungen<br>
+                    <strong style="border:1px dashed var(--orange);padding:0 4px;">⬚</strong> — Sicherheitsfenster um Fälligkeiten (einstellbar)<br>
+                    <strong style="color:var(--accent);">▪ Blau</strong> — Fälligkeitstag (blaue Unterlinie)<br>
+                    <strong>✕🔒</strong> — Bankfreier Tag (Wochenende/Feiertag), keine Buchungen möglich<br><br>
+
+                    Klicke auf einen Tag um rechts die Details zu sehen: welche Verträge abgebucht werden,
+                    Beträge und ob Buchungen von einem Wochenende/Feiertag verschoben wurden.<br><br>
+
+                    <strong>Bankfeiertage</strong><br>
+                    Das System kennt alle bundesweiten Feiertage und TARGET-Bankfeiertage
+                    (Heiligabend, Silvester). Ostersonntag wird dynamisch berechnet — die Feiertagserkennung
+                    funktioniert automatisch für jedes Jahr.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Vertragsprüfung</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    Verträge werden regelmäßig zur Prüfung vorgelegt (Standard: alle 12 Monate).
+                    Fällige Prüfungen erkennst du am Symbol in der Vertragsliste und am roten Badge in der Seitenleiste.<br><br>
+
+                    <strong>⚠ Reguläre Prüfung</strong> — Das Prüfintervall ist abgelaufen, Zeit den Vertrag zu checken.<br>
+                    <strong>📆 Wiedervorlage</strong> — Du hast die Prüfung zurückgestellt, sie wird in ca. 30 Tagen erneut vorgelegt.<br><br>
+
+                    Beim Klick auf das Symbol öffnet sich ein Dialog mit drei Optionen:<br>
+                    — <strong>✅ Geprüft</strong>: Alles in Ordnung, nächste Prüfung in X Monaten.<br>
+                    — <strong>✏️ Ändern</strong>: Öffnet den Vertrag zum Bearbeiten. Nach dem Speichern wird er automatisch als geprüft markiert.<br>
+                    — <strong>🔔 Später vorlegen</strong>: Wenn du noch Unterlagen anfragen oder Rückfragen mit dem Vertragspartner klären musst.<br><br>
+
+                    <strong>KFZ-Versicherung</strong><br>
+                    Verträge der Kategorie „Versicherungen" können als KFZ oder Moped/E-Scooter markiert werden.
+                    Diese werden unabhängig vom regulären Intervall jährlich zum eingestellten Prüfmonat fällig
+                    (Standard: November für KFZ, Januar für Moped). Die Prüfmonate sind in den Einstellungen anpassbar.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Preisänderungen & Enddatum</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    <strong>Geplante Preisänderungen</strong><br>
+                    Im Bearbeiten-Dialog kannst du zukünftige Preisänderungen hinterlegen.
+                    Gib den neuen Betrag und das Datum an, ab dem er gelten soll.
+                    Das System schlägt automatisch den nächsten Fälligkeitstermin als Datum vor.
+                    In der Vertragsliste siehst du anstehende Änderungen als oranges Badge.<br><br>
+
+                    <strong>Enddatum</strong><br>
+                    Verträge mit Enddatum werden nach Ablauf automatisch deaktiviert.
+                    Die Simulation und der Kalender zeigen keine Buchungen mehr nach dem Enddatum.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Dauerauftrags-Empfehlung</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    Im Dashboard zeigt die Dauerauftrags-Empfehlung pro Konto, wie viel monatlich benötigt wird
+                    um alle zugeordneten Verträge zu decken (abzüglich der Einzahlungen auf diesem Konto).
+                    Vergleiche die Werte mit deinen eingerichteten Daueraufträgen bei der Bank und passe sie an,
+                    wenn sich deine Verträge geändert haben.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Kontostand-Schätzung</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    Beim Start zeigt die App eine Schätzung deines aktuellen Kontostands.
+                    Diese basiert auf dem zuletzt eingegebenen Stand plus alle seitdem fälligen
+                    Einnahmen und Ausgaben. Du kannst den Wert bestätigen, korrigieren oder überspringen.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Einstellungen</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    <strong>Sicherheitstage:</strong> Anzahl der Tage nach einer Fälligkeit die im Kalender als Sicherheitsfenster markiert werden (Standard: 3).<br>
+                    <strong>Standard-Prüfintervall:</strong> Wird beim Anlegen neuer Verträge voreingestellt.<br>
+                    <strong>KFZ-Prüfmonat:</strong> Ab welchem Monat KFZ-Versicherungen zur Prüfung fällig werden (Standard: November).<br>
+                    <strong>Moped-Prüfmonat:</strong> Ab welchem Monat Moped/E-Scooter-Versicherungen fällig werden (Standard: Januar).<br>
+                    <strong>Kategorien:</strong> Kategorien hinzufügen, löschen oder aus Vorschlägen übernehmen. Die Kategorie „Versicherungen" ist gesperrt.<br>
+                    <strong>Backup:</strong> Die Datenbank als Datei herunterladen.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Daten & Sicherheit</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    <strong>100% lokal:</strong> Kontolotse läuft als lokaler Webserver auf deinem Computer.
+                    Keine Daten werden ins Internet übertragen. Die Datenbank liegt als einzelne Datei
+                    (kontolotse.db) im Programmverzeichnis.<br><br>
+                    <strong>Portabel:</strong> Du kannst den gesamten Ordner frei verschieben, umbenennen oder
+                    auf einen USB-Stick kopieren. Die App erkennt automatisch ihr Verzeichnis und funktioniert überall,
+                    solange Python installiert ist.<br><br>
+                    <strong>Backup:</strong> Unter Einstellungen → System kannst du jederzeit ein vollständiges
+                    Backup der Datenbank herunterladen. Speichere es regelmäßig an einem sicheren Ort.<br><br>
+                    <strong>Technologie:</strong> Python (FastAPI), SQLite, Vanilla JavaScript, Chart.js.
+                    Keine Frameworks, keine Abhängigkeiten zu externen Diensten.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Tastenkürzel & Tipps</h3></div>
+                <p style="color:var(--text-secondary);line-height:1.8;">
+                    — Klicke auf eine Vertragszeile um den Vertrag zu bearbeiten<br>
+                    — Im Startpopup: Enter-Taste bestätigt den Kontostand<br>
+                    — Datumshilfe: Wenn du das genaue Startdatum eines Vertrags nicht kennst,
+                    gib mehrere bekannte Abbuchungsdaten ein — die App berechnet den wahrscheinlichsten Tag<br>
+                    — Im Kalender: Klicke auf Tage für Details, nutze die Pfeile zum Blättern<br>
+                    — Die Zuverlässigkeits-Kachel im Dashboard ist klickbar und springt zum Kalender
+                </p>
+            </div>
+
+            <div class="card" style="text-align:center;border:1px dashed var(--accent);background:var(--accent-glow);">
+                <p style="font-size:1rem;margin-bottom:8px;">💬 <strong>Feedback & Ideen</strong></p>
+                <p style="color:var(--text-secondary);font-size:0.88rem;margin-bottom:14px;">
+                    Fehler gefunden? Feature-Wunsch? Verbesserungsvorschlag?
+                </p>
+                <a href="https://github.com/TobiasLillig/Kontolotse/issues" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-block;">
+                    Auf GitHub melden →
+                </a>
+            </div>
+
+            <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.85rem;">
+                Kontolotse v1.0 · Vibecodet with ❤️ · <a href="https://ko-fi.com/tobi_mit_1000_ideen" target="_blank" rel="noopener" style="color:var(--accent);">☕ Unterstützen</a>
+            </div>
+        </section>
+
+        <!-- Debug Panel (versteckt) -->
+        <div id="debug-panel" class="hidden" style="position:fixed;bottom:70px;left:24px;z-index:9000;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);max-width:300px;">
+            <h4 style="font-size:0.85rem;margin-bottom:12px;color:var(--orange);">🐛 Debug-Menü</h4>
+            <button class="btn btn-ghost btn-sm" onclick="debugPruefungFaellig()" style="width:100%;margin-bottom:8px;">Zufälligen Vertrag auf Prüfung setzen</button>
+            <button class="btn btn-ghost btn-sm" onclick="debugAllePruefungFaellig()" style="width:100%;margin-bottom:8px;">Alle Verträge auf Prüfung setzen</button>
+            <button class="btn btn-ghost btn-sm" onclick="API.put('/api/parameter',{erststart_erledigt:''}).then(()=>toast('Erststart zurückgesetzt. Seite neu laden.'))" style="width:100%;margin-bottom:8px;">Erststart-Disclaimer zurücksetzen</button>
+            <button class="btn btn-ghost btn-sm" onclick="localStorage.removeItem('dash_tiles_v3');toast('Kachel-Layout zurückgesetzt. Seite neu laden.')" style="width:100%;margin-bottom:8px;">Kachel-Layout zurücksetzen</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('debug-panel').classList.add('hidden')" style="width:100%;opacity:0.6;">Schließen</button>
+        </div>
+
+    </main>
+</div>
+
+<!-- Neuer Vertrag Modal -->
+<div id="new-vertrag-modal" class="modal-overlay hidden" >
+    <div class="modal-content">
+        <h3>Neuer Vertrag</h3>
+        <div class="form-grid">
+            <div class="form-group"><label>Name *</label><input type="text" id="v-name" placeholder="z.B. Miete, Netflix"></div>
+            <div class="form-group"><label>Vertragspartner</label><input type="text" id="v-vertragspartner" placeholder="z.B. Telekom, Netflix GmbH"></div>
+            <div class="form-group"><label>Kategorie</label><select id="v-kategorie"></select></div>
+            <div class="form-group"><label>Konto</label><select id="v-konto"></select></div>
+            <div class="form-group"><label>Betrag (EUR) *</label><input type="number" id="v-betrag" step="0.01" min="0" placeholder="0,00"></div>
+            <div class="form-group">
+                <label>Startdatum *</label>
+                <input type="date" id="v-startdatum" onchange="autoFillAbbuchungstag('v')">
+                <a href="#" onclick="toggleDatumHilfe();return false;" style="font-size:0.72rem;color:var(--accent);margin-top:4px;">Datum unsicher? Hilfe → <span style="opacity:0.6;">(experimentell)</span></a>
+            </div>
+            <div class="form-group"><label>Abbuchungstag (1-31)</label><input type="number" id="v-abbuchungstag" min="1" max="31" placeholder="Tag aus Startdatum"></div>
+            <div class="form-group"><label>Rhythmus</label>
+                <select id="v-rhythmus">
+                    <option value="monatlich">Monatlich</option>
+                    <option value="quartalsweise">Quartalsweise</option>
+                    <option value="halbjaehrlich">Halbjährlich</option>
+                    <option value="jaehrlich">Jährlich</option>
+                    <option value="zweijaehrlich">Zweijährlich</option>
+                </select>
+            </div>
+            <div class="form-group full-width"><label>Bemerkung</label><input type="text" id="v-bemerkung" placeholder="Optional"></div>
+            <div class="form-group"><label>Enddatum (optional)</label><input type="date" id="v-enddatum"></div>
+                    <div class="form-group"><label>Mindestlaufzeit bis</label><input type="date" id="v-mindestlaufzeit"></div>
+                    <div class="form-group"><label>Kündigungsfrist (Monate)</label><input type="number" id="v-kuendigungsfrist" min="0" max="12" value="2"></div>
+            <div class="form-group" id="v-versicherung-group" style="display:none;">
+                <label>Versicherungstyp</label>
+                <select id="v-versicherungstyp">
+                    <option value="">Keine spez. Prüfung</option>
+                    <option value="kfz">KFZ-Versicherung</option>
+                    <option value="moped_escooter">Moped/E-Scooter</option>
+                </select>
+            </div>
+        </div>
+        <div id="datum-hilfe-panel" class="datum-hilfe hidden">
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;">Letzte Abbuchungsdaten eingeben — der Durchschnittstag wird als Startdatum gesetzt:</div>
+            <div id="datum-hilfe-inputs" class="datum-hilfe-inputs">
+                <span class="datum-hilfe-btns">
+                    <button class="btn btn-ghost btn-sm" type="button" onclick="addDatumHilfeInput()">+ Datum</button>
+                    <button class="btn btn-primary btn-sm" type="button" onclick="berechneDurchschnittsDatum()">Berechnen</button>
+                    <button class="btn btn-ghost btn-sm" type="button" onclick="resetDatumHilfe()" style="opacity:0.6;">Zurücksetzen</button>
+                </span>
+            </div>
+            <div id="datum-hilfe-result" class="datum-hilfe-result"></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+            <button class="btn btn-ghost" onclick="document.getElementById('new-vertrag-modal').classList.add('hidden')">Abbrechen</button>
+            <button class="btn btn-primary" onclick="addVertrag()">Vertrag speichern</button>
+        </div>
+    </div>
+</div>
+
+<!-- Vertrag bearbeiten Modal -->
+<div id="edit-modal" class="modal-overlay hidden" >
+    <div class="modal-content">
+        <h3>Vertrag bearbeiten</h3>
+        <div class="form-grid">
+            <div class="form-group"><label>Name *</label><input type="text" id="ev-name"></div>
+            <div class="form-group"><label>Vertragspartner</label><input type="text" id="ev-vertragspartner" placeholder="z.B. Telekom"></div>
+            <div class="form-group"><label>Kategorie</label><select id="ev-kategorie"></select></div>
+            <div class="form-group"><label>Konto</label><select id="ev-konto"></select></div>
+            <div class="form-group"><label>Betrag (EUR) *</label><input type="number" id="ev-betrag" step="0.01" min="0"></div>
+            <div class="form-group"><label>Startdatum *</label><input type="date" id="ev-startdatum" onchange="autoFillAbbuchungstag('ev')"></div>
+            <div class="form-group"><label>Abbuchungstag (1-31)</label><input type="number" id="ev-abbuchungstag" min="1" max="31"></div>
+            <div class="form-group"><label>Rhythmus</label>
+                <select id="ev-rhythmus">
+                    <option value="monatlich">Monatlich</option>
+                    <option value="quartalsweise">Quartalsweise</option>
+                    <option value="halbjaehrlich">Halbjährlich</option>
+                    <option value="jaehrlich">Jährlich</option>
+                    <option value="zweijaehrlich">Zweijährlich</option>
+                </select>
+            </div>
+            <div class="form-group full-width"><label>Bemerkung</label><input type="text" id="ev-bemerkung"></div>
+            <div class="form-group"><label>Status</label>
+                <div class="toggle-group"><input type="checkbox" id="ev-aktiv" checked><span>Aktiv</span></div>
+            </div>
+            <div class="form-group"><label>Prüfintervall</label>
+                <select id="ev-pruef-intervall">
+                    <option value="6">Alle 6 Monate</option>
+                    <option value="12" selected>Alle 12 Monate</option>
+                    <option value="24">Alle 24 Monate</option>
+                    <option value="0">Nie</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Letzte Prüfung</label>
+                <span id="ev-letzte-pruefung" style="color:var(--text-secondary);font-size:0.9rem;">–</span>
+            </div>
+            <div class="form-group"><label>Enddatum (optional)</label><input type="date" id="ev-enddatum"></div>
+            <div class="form-group"><label>Mindestlaufzeit bis</label><input type="date" id="ev-mindestlaufzeit"></div>
+            <div class="form-group"><label>Kündigungsfrist (Monate)</label><input type="number" id="ev-kuendigungsfrist" min="0" max="12" value="2"></div>
+            <div class="form-group" id="ev-versicherung-group" style="display:none;">
+                <label>Versicherungstyp</label>
+                <select id="ev-versicherungstyp">
+                    <option value="">Keine spez. Prüfung</option>
+                    <option value="kfz">KFZ-Versicherung (Prüfung im Herbst)</option>
+                    <option value="moped_escooter">Moped/E-Scooter (Prüfung zum Saisonstart)</option>
+                </select>
+            </div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px;">
+            <h4 style="font-size:0.9rem;margin-bottom:12px;">Geplante Preisänderungen</h4>
+            <div id="ev-pa-list"></div>
+            <div class="form-grid" style="margin-top:12px;">
+                <div class="form-group"><label>Neuer Betrag (EUR)</label><input type="number" id="ev-pa-betrag" step="0.01" min="0" placeholder="0,00"></div>
+                <div class="form-group"><label>Ab Datum</label><input type="date" id="ev-pa-datum"></div>
+                <div class="form-group full-width"><label>Bemerkung</label><input type="text" id="ev-pa-bemerkung" placeholder="z.B. Preiserhöhung"></div>
+            </div>
+            <div class="form-actions" style="margin-top:8px;">
+                <button class="btn btn-ghost btn-sm" onclick="addPreisaenderung()">Preisänderung hinzufügen</button>
+            </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-danger btn-sm" onclick="deleteVertragFromModal()">Vertrag löschen</button>
+                <button class="btn btn-warn btn-sm" onclick="pruefungMarkieren()" title="Vertrag wird als prüfungsfällig markiert">⚠ Zur Prüfung</button>
+                <button class="btn btn-ghost btn-sm" onclick="vertragInTopf()" title="Vertrag in Spartopf umwandeln">🏦 In Topf</button>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <button class="btn btn-ghost" onclick="closeEditModal()">Abbrechen</button>
+                <button class="btn btn-primary" onclick="saveEditVertrag()">Speichern</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Topf-Buchung Popup -->
+<div id="topf-popup" class="modal-overlay hidden" >
+    <div class="modal-content" style="max-width:450px;">
+        <h3 id="tp-title">Buchung</h3>
+        <div class="form-grid">
+            <div class="form-group"><label>Betrag (EUR) *</label><input type="number" id="tp-betrag" step="0.01" min="0" placeholder="0,00"></div>
+            <div class="form-group"><label>Datum</label><input type="date" id="tp-datum"></div>
+            <div class="form-group full-width hidden" id="tp-ziel-group"><label>Zielkonto</label><select id="tp-ziel"></select></div>
+            <div class="form-group full-width"><label>Beschreibung</label><input type="text" id="tp-beschreibung" placeholder="Optional"></div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-ghost" onclick="closeTopfPopup()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="executeTopfPopup()">Buchen</button>
+        </div>
+    </div>
+</div>
+
+<!-- Einzahlung bearbeiten Modal -->
+<div id="einzahlung-modal" class="modal-overlay hidden" >
+    <div class="modal-content" style="max-width:500px;">
+        <h3>Einzahlung bearbeiten</h3>
+        <div class="form-grid">
+            <div class="form-group"><label>Bezeichnung *</label><input type="text" id="ee-bezeichnung"></div>
+            <div class="form-group"><label>Betrag (EUR) *</label><input type="number" id="ee-betrag" step="0.01" min="0"></div>
+            <div class="form-group"><label>Tag im Monat</label><input type="number" id="ee-tag" min="1" max="31"></div>
+            <div class="form-group"><label>Typ</label>
+                <select id="ee-typ"><option value="fest">Fest (monatlich)</option><option value="manuell">Manuell / Einmalig</option></select>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-ghost" onclick="closeEinzahlungModal()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="saveEditEinzahlung()">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<!-- Universelles Bestätigungs-Modal -->
+<div id="confirm-modal" class="modal-overlay hidden" >
+    <div class="modal-content" style="max-width:560px;text-align:center;">
+        <h3 id="confirm-modal-title" style="margin-bottom:12px;">Bestätigung</h3>
+        <p id="confirm-modal-text" style="color:var(--text-secondary);margin-bottom:20px;white-space:pre-line;"></p>
+        <div id="confirm-modal-buttons" style="display:flex;gap:10px;justify-content:center;"></div>
+    </div>
+</div>
+
+<!-- Vertragsprüfung Modal -->
+<div id="pruef-modal" class="modal-overlay hidden" >
+    <div class="modal-content" style="max-width:480px;text-align:center;">
+        <h3 style="margin-bottom:4px;">Vertragsprüfung</h3>
+        <p id="pruef-modal-name" style="font-size:1.1rem;font-weight:700;color:var(--accent);margin-bottom:4px;">–</p>
+        <p id="pruef-modal-info" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:20px;">–</p>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <button class="btn btn-primary" onclick="pruefungBestaetigen()" style="width:100%;padding:12px;">
+                ✅ Geprüft — alles in Ordnung
+            </button>
+            <button class="btn btn-ghost" onclick="pruefungAendern()" style="width:100%;padding:12px;">
+                ✏️ Vertrag jetzt ändern
+            </button>
+            <button class="btn btn-ghost" onclick="pruefungSpaeter()" style="width:100%;padding:12px;opacity:0.8;">
+                🔔 Später erneut vorlegen (in 30 Tagen)
+            </button>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="closePruefModal()" style="margin-top:16px;opacity:0.5;">Abbrechen</button>
+    </div>
+</div>
+
+<!-- Neuer Topf Modal -->
+<div id="new-topf-modal" class="modal-overlay hidden" >
+    <div class="modal-content" style="max-width:450px;">
+        <h3>Neuen Topf anlegen</h3>
+        <div class="form-grid">
+            <div class="form-group"><label>Name *</label><input type="text" id="t-name" placeholder="z.B. Urlaub, Kleidung"></div>
+            <div class="form-group"><label>Aktueller Saldo (EUR)</label><input type="number" id="t-saldo" step="0.01" value="0"></div>
+            <div class="form-group"><label>Monatl. Zuweisung (EUR)</label><input type="number" id="t-monatlich" step="0.01" value="0"></div>
+            <div class="form-group"><label>Zuweisung ab</label><input type="date" id="t-startdatum"></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+            <button class="btn btn-ghost" onclick="document.getElementById('new-topf-modal').classList.add('hidden')">Abbrechen</button>
+            <button class="btn btn-primary" onclick="addTopf()">Topf anlegen</button>
+        </div>
+    </div>
+</div>
+
+<!-- Topf-Zuweisung Modal -->
+<div id="topf-zuweisung-modal" class="modal-overlay hidden" >
+    <div class="modal-content" style="max-width:420px;">
+        <h3>Monatliche Zuweisung</h3>
+        <p style="color:var(--accent);font-weight:700;margin-bottom:16px;" id="topf-zuw-name">–</p>
+        <input type="hidden" id="topf-zuw-id">
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Betrag (EUR)</label>
+                <input type="number" id="topf-zuw-betrag" step="0.01" min="0" placeholder="0,00">
+            </div>
+            <div class="form-group">
+                <label>Ab Datum</label>
+                <input type="date" id="topf-zuw-datum">
+            </div>
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:8px 0 16px;">Dieser Betrag wird monatlich ab dem angegebenen Datum dem Topf zugewiesen (Umschlagsystem).</p>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="document.getElementById('topf-zuweisung-modal').classList.add('hidden')">Abbrechen</button>
+            <button class="btn btn-primary" onclick="saveTopfZuweisung(parseInt(document.getElementById('topf-zuw-id').value))">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<!-- Kontostand-Popup beim Start -->
+<div id="startup-modal" class="modal-overlay hidden" >
+    <div class="modal-content" style="max-width:450px;text-align:center;">
+        <h3>Willkommen zurück!</h3>
+        <p style="color:var(--text-secondary);margin-bottom:16px;">Möchtest du deinen aktuellen Bankkontostand aktualisieren?</p>
+        <div id="startup-warnung"></div>
+        <div class="form-group" style="margin-bottom:16px;">
+            <label>Aktueller Bankkonto-Saldo (EUR)</label>
+            <input type="number" id="startup-saldo" step="0.01" placeholder="0,00" style="text-align:center;font-size:1.1rem;">
+        </div>
+        <div id="startup-info" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;"></div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+            <button class="btn btn-ghost" onclick="closeStartupModal()">Überspringen</button>
+            <button class="btn btn-primary" onclick="saveStartupSaldo()">Aktualisieren</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
